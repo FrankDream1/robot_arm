@@ -8,7 +8,7 @@
 #include <cstdint>
 #include <iostream>
 
-// 定义一个继承自 rclcpp::Node 的串口通信节点类
+// 定义一个继承自rclcpp::Node的串口通信节点类
 class SerialCommNode : public rclcpp::Node {
 public:
     SerialCommNode() : Node("serial_comm_node") {
@@ -19,16 +19,16 @@ public:
             return;
         }
 
-        // 创建发布器，用于发布电机反馈数据（角度和扭矩）
+        // 创建发布器，用于发布电机反馈数据
         joint_pub_ = this->create_publisher<sensor_msgs::msg::JointState>("/motor_feedback", 10);
 
-        // 创建订阅器，接收来自话题 /motor_command 的控制指令
+        // 创建订阅器，接收来自话题/motor_command的控制指令
         cmd_sub_ = this->create_subscription<std_msgs::msg::String>(
             "/motor_command", 10,
             std::bind(&SerialCommNode::command_callback, this, std::placeholders::_1)
         );
 
-        // 创建一个定时器，每 100ms 调用一次 timer_callback()，用于周期性通信
+        // 创建一个定时器，每100ms调用一次timer_callback()，用于周期性通信
         timer_ = this->create_wall_timer(
             std::chrono::milliseconds(100),
             std::bind(&SerialCommNode::timer_callback, this)
@@ -78,13 +78,15 @@ private:
         return fd;
     }
 
-    // 发送控制帧给下位机，cmd 为 16 位控制字
-    void sendControlFrame(uint16_t cmd) {
-        uint8_t frame[6];
+    // 发送控制帧给下位机，cmd32位控制字
+    void sendControlFrame(uint32_t cmd) {
+        uint8_t frame[8];
         frame[0] = 0xAA; // 帧头
-        frame[1] = (cmd >> 8) & 0xFF;
-        frame[2] = cmd & 0xFF;
-        uint16_t crc = CRC16_CCITT(&frame[1], 2); // 计算 CRC
+        frame[1] = (cmd >> 24) & 0xFF;
+        frame[2] = (cmd >> 16) & 0xFF;
+        frame[3] = (cmd >> 8) & 0xFF;
+        frame[4] = cmd & 0xFF;
+        uint16_t crc = CRC16_CCITT(&frame[1], 4); // 计算CRC
         frame[3] = (crc >> 8) & 0xFF;
         frame[4] = crc & 0xFF;
         frame[5] = 0x55; // 帧尾
@@ -109,21 +111,24 @@ private:
         uint16_t received_crc = (buffer[41] << 8) | buffer[42];
         if (crc != received_crc) return;
 
-        // 提取电机角度（8个 float）和扭矩（2个 float）
+        // 提取电机角度（8个float）和电流（2个float）
         float angles[8];
-        float torques[2];
+        float currents[2];
         memcpy(angles, &buffer[1], 32);
-        memcpy(torques, &buffer[33], 8);
+        memcpy(currents, &buffer[33], 8);
 
-        // 构造 ROS2 JointState 消息
+        // 构造ROS2 JointState消息
         auto msg = sensor_msgs::msg::JointState();
         msg.header.stamp = this->now();
+        const char* motor_names[8] = {"L1", "L2", "L3", "R1", "R2", "R3", "F1", "B1","L4","R4"};
         for (int i = 0; i < 8; ++i) {
-            msg.name.push_back("motor" + std::to_string(i + 1));
+            msg.name.push_back("motor" + std::string(motor_names[i]));
             msg.position.push_back(angles[i]);
         }
-        msg.effort.push_back(torques[0]);
-        msg.effort.push_back(torques[1]);
+        msg.name.push_back("motorL4");
+        msg.name.push_back("motorR4");
+        msg.effort.push_back(currents[0]);
+        msg.effort.push_back(currents[1]);
 
         joint_pub_->publish(msg); // 发布反馈消息
     }
@@ -134,14 +139,14 @@ private:
         receiveFeedbackFrame();
     }
 
-    // 订阅器回调函数，接收字符串控制指令（16bit 十六进制）
+    // 订阅器回调函数，接收字符串控制指令（32bit十六进制）
     void command_callback(const std_msgs::msg::String::SharedPtr msg) {
         try {
-            uint16_t cmd = std::stoul(msg->data, nullptr, 16); // 转换为 16 位整数
+            uint32_t cmd = std::stoul(msg->data, nullptr, 16); // 转换为 32 位整数
             current_command_ = cmd; // 更新控制命令
-            RCLCPP_INFO(this->get_logger(), "收到控制命令: 0x%04X", cmd);
+            RCLCPP_INFO(this->get_logger(), "收到控制命令: 0x%08X", cmd);
         } catch (...) {
-            RCLCPP_ERROR(this->get_logger(), "命令格式错误，应为十六进制字符串（如 '0001'）");
+            RCLCPP_ERROR(this->get_logger(), "命令格式错误，应为32位十六进制字符串（如 '00000001'）");
         }
     }
 };
