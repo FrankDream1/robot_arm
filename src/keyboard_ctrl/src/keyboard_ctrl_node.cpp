@@ -39,6 +39,8 @@ private:
     uint8_t motor_states_[12] = {0};
     std::unordered_map<char, KeyControl> key_map_; // 键盘按键映射
     static struct termios orig_term_; // 原始终端设置
+    bool f2_needs_clear_ = false;
+    bool b2_needs_clear_ = false;
 
     // 配置终端为非规范模式，禁用回显
     void configure_terminal() {
@@ -86,6 +88,11 @@ private:
                 it->second.is_pressed = true;
                 it->second.last_press_time = steady_clock::now(); // 更新按下时间
             }
+            if (it->second.motor_idx == 10) {
+                f2_needs_clear_ = true;
+            } else if (it->second.motor_idx == 11) {
+                b2_needs_clear_ = true;
+            }
         }
 
         // 处理长按逻辑，超过300ms未松开则将状态置为0
@@ -105,14 +112,6 @@ private:
             }
         }
 
-        // F2和B2无操作时发00忽略
-        if (motor_states_[10] != 0x01 && motor_states_[10] != 0x02 && motor_states_[10] != 0x03) {
-            motor_states_[10] = 0x00;
-        }
-        if (motor_states_[11] != 0x01 && motor_states_[11] != 0x02 && motor_states_[11] != 0x03) {
-            motor_states_[11] = 0x00;
-        }
-
         // 拼成24bits数据（按顺序组合12个2bits控制位）
         uint32_t cmd = 0;
         for (int i = 0; i < 12; ++i) {
@@ -125,6 +124,15 @@ private:
         auto msg = std_msgs::msg::String();
         msg.data = buf;
         publisher_->publish(msg);
+        
+        if (f2_needs_clear_) {
+            motor_states_[10] = 0x00;
+            f2_needs_clear_ = false;
+        }
+        if (b2_needs_clear_) {
+            motor_states_[11] = 0x00;
+            b2_needs_clear_ = false;
+        }
     }
 };
 
