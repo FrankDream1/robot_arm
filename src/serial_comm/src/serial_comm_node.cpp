@@ -8,6 +8,15 @@
 #include <cstdint>
 #include <iostream>
 
+/*
+    上位机给下位机下发的数据帧（7字节），格式为0xAA（帧头）+12个电机控制命令
+    （L1+L2+L3+L4+R1+R2+R3+R4+F1+B1+F2+B2，12*2bits控制位+6bits空闲位（3bytes））+CRC校验位（2bytes）+0x55（帧尾）
+        其中，机械臂和行走轮电机的控制位使用两位来表示控制状态指令，00表示停止，01表示正转，10表示反转，11表示优摩特设定为速度模式
+        夹紧轮电机的控制位使用两位来表示控制状态指令，00表示夹紧，01表示张开，10表示压紧后张开微调，11表示忽略
+    下位机反馈给上位机的数据帧（44字节），格式为0x55（帧头）+8个电机角度值
+    （L1+L2+L3+R1+R2+R3+F1+B1，8*4bytes（float）（32bytes））+两个电机电流值（L4+R4，2*4bytes（float）（8bytes））+CRC校验位（2bytes）+0xAA（帧尾）
+*/
+
 // 定义一个继承自rclcpp::Node的串口通信节点类
 class SerialCommNode : public rclcpp::Node {
 public:
@@ -68,9 +77,9 @@ private:
         cfsetospeed(&options, B115200);
         options.c_cflag |= (CLOCAL | CREAD); // 允许接收
         options.c_cflag &= ~PARENB; // 无校验位
-        options.c_cflag &= ~CSTOPB; // 1 个停止位
+        options.c_cflag &= ~CSTOPB; // 1个停止位
         options.c_cflag &= ~CSIZE;
-        options.c_cflag |= CS8; // 8 位数据位
+        options.c_cflag |= CS8; // 8位数据位
         options.c_lflag &= ~(ICANON | ECHO | ECHOE | ISIG); // 原始输入模式
         options.c_iflag &= ~(IXON | IXOFF | IXANY); // 关闭软件流控
         tcsetattr(fd, TCSANOW, &options);
@@ -78,18 +87,17 @@ private:
         return fd;
     }
 
-    // 发送控制帧给下位机，cmd32位控制字
+    // 发送控制帧给下位机，cmd24位控制字
     void sendControlFrame(uint32_t cmd) {
-        uint8_t frame[8];
+        uint8_t frame[7];
         frame[0] = 0xAA; // 帧头
-        frame[1] = (cmd >> 24) & 0xFF;
-        frame[2] = (cmd >> 16) & 0xFF;
-        frame[3] = (cmd >> 8) & 0xFF;
-        frame[4] = cmd & 0xFF;
-        uint16_t crc = CRC16_CCITT(&frame[1], 4); // 计算CRC
-        frame[3] = (crc >> 8) & 0xFF;
-        frame[4] = crc & 0xFF;
-        frame[5] = 0x55; // 帧尾
+        frame[1] = (cmd >> 16) & 0xFF;
+        frame[2] = (cmd >> 8) & 0xFF;
+        frame[3] = cmd & 0xFF;
+        uint16_t crc = CRC16_CCITT(&frame[1], 3); // 计算CRC
+        frame[4] = (crc >> 8) & 0xFF;
+        frame[5] = crc & 0xFF;
+        frame[6] = 0x55; // 帧尾
         write(fd_, frame, sizeof(frame)); // 写入串口
     }
 
@@ -139,14 +147,14 @@ private:
         receiveFeedbackFrame();
     }
 
-    // 订阅器回调函数，接收字符串控制指令（32bit十六进制）
+    // 订阅器回调函数，接收字符串控制指令（24bit十六进制）
     void command_callback(const std_msgs::msg::String::SharedPtr msg) {
         try {
             uint32_t cmd = std::stoul(msg->data, nullptr, 16); // 转换为 32 位整数
             current_command_ = cmd; // 更新控制命令
-            RCLCPP_INFO(this->get_logger(), "收到控制命令: 0x%08X", cmd);
+            RCLCPP_INFO(this->get_logger(), "收到控制命令: 0x%06X", cmd); 
         } catch (...) {
-            RCLCPP_ERROR(this->get_logger(), "命令格式错误，应为32位十六进制字符串（如 '00000001'）");
+            RCLCPP_ERROR(this->get_logger(), "命令格式错误，应为24位十六进制字符串（如 '0x123456'）");
         }
     }
 };
