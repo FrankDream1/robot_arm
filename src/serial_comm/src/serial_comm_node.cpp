@@ -54,7 +54,7 @@ private:
     // CRC16-CCITT 校验函数，用于数据完整性验证
     uint16_t CRC16_CCITT(const uint8_t* data, uint16_t length) {
         uint16_t crc = 0xFFFF;
-        for(uint8_t i = 0; i < len; i++){
+        for(uint8_t i = 0; i < length; i++){
             crc ^= (uint16_t)(data[i] << 8);
             for(uint8_t j = 0; j < 8; j++){
                 if(crc & 0x8000)
@@ -128,8 +128,8 @@ private:
         // 构造ROS2 JointState消息
         auto msg = sensor_msgs::msg::JointState();
         msg.header.stamp = this->now();
-        const char* motor_names[8] = {"L1", "L2", "L3", "R1", "R2", "R3", "F1", "B1","L4","R4"};
-        for (int i = 0; i < 8; ++i) {
+        const char* motor_names[10] = {"L1", "L2", "L3", "R1", "R2", "R3", "F1", "B1", "L4", "R4"};
+        for (int i = 0; i < 10; ++i) {
             msg.name.push_back("motor" + std::string(motor_names[i]));
             msg.position.push_back(angles[i]);
         }
