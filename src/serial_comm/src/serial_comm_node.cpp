@@ -68,21 +68,21 @@ private:
 
     // 打开串口并配置参数
     int openSerialPort(const char* port) {
-        int fd = open(port, O_RDWR | O_NOCTTY);
+        int fd = open(port, O_RDWR | O_NOCTTY); // 打开串口设备
         if (fd < 0) return -1;
 
-        termios options{};
-        tcgetattr(fd, &options);
-        cfsetispeed(&options, B115200);
-        cfsetospeed(&options, B115200);
+        termios options{}; // 初始化termios结构体
+        tcgetattr(fd, &options); // 获取当前串口配置
+        cfsetispeed(&options, B115200); // 设置输入波特率
+        cfsetospeed(&options, B115200); // 设置输出波特率
         options.c_cflag |= (CLOCAL | CREAD); // 允许接收
         options.c_cflag &= ~PARENB; // 无校验位
         options.c_cflag &= ~CSTOPB; // 1个停止位
-        options.c_cflag &= ~CSIZE;
+        options.c_cflag &= ~CSIZE; // 清除数据位设置
         options.c_cflag |= CS8; // 8位数据位
         options.c_lflag &= ~(ICANON | ECHO | ECHOE | ISIG); // 原始输入模式
         options.c_iflag &= ~(IXON | IXOFF | IXANY); // 关闭软件流控
-        tcsetattr(fd, TCSANOW, &options);
+        tcsetattr(fd, TCSANOW, &options); // 应用配置
 
         return fd;
     }
@@ -105,7 +105,7 @@ private:
     void receiveFeedbackFrame() {
         uint8_t buffer[44];
         int total = 0;
-        // 持续读取直到完整收到 44 字节
+        // 持续读取直到完整收到44字节
         while (total < 44) {
             int n = read(fd_, buffer + total, 44 - total);
             if (n > 0) total += n;
@@ -114,7 +114,7 @@ private:
         // 校验帧头帧尾
         if (buffer[0] != 0x55 || buffer[43] != 0xAA) return;
 
-        // CRC 校验
+        // CRC校验
         uint16_t crc = CRC16_CCITT(&buffer[1], 40);
         uint16_t received_crc = (buffer[41] << 8) | buffer[42];
         if (crc != received_crc) return;
@@ -147,10 +147,10 @@ private:
         receiveFeedbackFrame();
     }
 
-    // 订阅器回调函数，接收字符串控制指令（24bit十六进制）
+    // 订阅器回调函数，接收字符串控制指令（24bits十六进制）
     void command_callback(const std_msgs::msg::String::SharedPtr msg) {
         try {
-            uint32_t cmd = std::stoul(msg->data, nullptr, 16); // 转换为 32 位整数
+            uint32_t cmd = std::stoul(msg->data, nullptr, 16); // 转换为32位整数
             current_command_ = cmd; // 更新控制命令
             RCLCPP_INFO(this->get_logger(), "收到控制命令: 0x%06X", cmd); 
         } catch (...) {
@@ -161,7 +161,7 @@ private:
 
 // 主函数入口
 int main(int argc, char *argv[]) {
-    rclcpp::init(argc, argv); // 初始化 ROS2
+    rclcpp::init(argc, argv); // 初始化ROS2
     rclcpp::spin(std::make_shared<SerialCommNode>()); // 启动节点
     rclcpp::shutdown(); // 清理资源
     return 0;

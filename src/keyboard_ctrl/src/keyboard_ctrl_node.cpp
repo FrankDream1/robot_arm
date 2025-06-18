@@ -10,20 +10,23 @@
 using namespace std::chrono;
 
 struct KeyControl {
-    uint8_t motor_idx;
-    uint8_t cmd_value;
-    bool is_pressed;
-    steady_clock::time_point last_press_time;
+    uint8_t motor_idx;  // 电机索引，0-9表示机械臂电机，10-11表示行走轮电机
+    uint8_t cmd_value;  // 控制值，2bit表示
+    bool is_pressed;    // 是否按下
+    steady_clock::time_point last_press_time;   // 上次按下时间，用于处理长按逻辑
 };
 
 class KeyboardControlNode : public rclcpp::Node {
 public:
     KeyboardControlNode() : Node("keyboard_control_node") {
+        // 发布控制指令话题
         publisher_ = this->create_publisher<std_msgs::msg::String>("/motor_command", 10);
-        configure_terminal();
-        init_key_map();
+
+        configure_terminal(); // 配置终端为非规范模式，禁用回显
+        init_key_map(); // 初始化按键映射
+
+        // 创建一个定时器，每100ms调用一次timer_callback()，用于读取键盘输入和发布控制指令
         timer_ = this->create_wall_timer(100ms, std::bind(&KeyboardControlNode::timer_callback, this));
-        RCLCPP_INFO(this->get_logger(), "Keyboard control node started");
     }
 
     ~KeyboardControlNode() {
@@ -31,60 +34,69 @@ public:
     }
 
 private:
-    rclcpp::Publisher<std_msgs::msg::String>::SharedPtr publisher_;
-    rclcpp::TimerBase::SharedPtr timer_;
+    rclcpp::Publisher<std_msgs::msg::String>::SharedPtr publisher_; // 控制指令发布器
+    rclcpp::TimerBase::SharedPtr timer_; // 定时器
     uint8_t motor_states_[12] = {0};
-    std::unordered_map<char, KeyControl> key_map_;
-    static struct termios orig_term_;
+    std::unordered_map<char, KeyControl> key_map_; // 键盘按键映射
+    static struct termios orig_term_; // 原始终端设置
 
+    // 配置终端为非规范模式，禁用回显
     void configure_terminal() {
-        tcgetattr(STDIN_FILENO, &orig_term_);
-        atexit(restore_terminal);
-        struct termios new_term = orig_term_;
-        new_term.c_lflag &= ~(ICANON | ECHO);
-        new_term.c_cc[VMIN] = 0;
-        new_term.c_cc[VTIME] = 0;
-        tcsetattr(STDIN_FILENO, TCSANOW, &new_term);
+        tcgetattr(STDIN_FILENO, &orig_term_); // 获取当前终端设置
+        atexit(restore_terminal); // 确保程序结束时恢复原始终端设置
+        struct termios new_term = orig_term_; // 设置新的终端属性
+        new_term.c_lflag &= ~(ICANON | ECHO); // 禁用规范模式和回显
+        new_term.c_cc[VMIN] = 0; // 设置最小字符数为0，允许非阻塞读取
+        new_term.c_cc[VTIME] = 0; // 设置超时为0，立即返回
+        tcsetattr(STDIN_FILENO, TCSANOW, &new_term); // 应用新的终端设置
     }
 
+    // 恢复原始终端设置
     static void restore_terminal() {
         tcsetattr(STDIN_FILENO, TCSANOW, &orig_term_);
     }
 
+    // 初始化按键映射，键值对形式：{按键字符, {电机索引, 控制值}}
     void init_key_map() {
         key_map_ = {
-            {'a', {0, 0x01}}, {'z', {0, 0x02}},
-            {'s', {1, 0x01}}, {'x', {1, 0x02}},
-            {'d', {2, 0x01}}, {'c', {2, 0x02}}, {'e', {2, 0x03}},
-            {'f', {3, 0x01}}, {'v', {3, 0x02}},
-            {'g', {4, 0x01}}, {'b', {4, 0x02}},
-            {'h', {5, 0x01}}, {'n', {5, 0x02}},
-            {'j', {6, 0x01}}, {'m', {6, 0x02}}, {'u', {6, 0x03}},
-            {'k', {7, 0x01}}, {'l', {7, 0x02}},
-            {'q', {8, 0x01}}, {'w', {8, 0x02}},
-            {'t', {9, 0x01}}, {'y', {9, 0x02}},
-            {'1', {10, 0x01}}, {'2', {10, 0x02}}, {'3', {10, 0x03}},
-            {'4', {11, 0x01}}, {'5', {11, 0x02}}, {'6', {11, 0x03}}
+            {'a', {0, 0x01}}, {'z', {0, 0x02}}, // L1
+            {'s', {1, 0x01}}, {'x', {1, 0x02}}, // L2
+            {'d', {2, 0x01}}, {'c', {2, 0x02}}, {'e', {2, 0x03}}, // L3
+            {'f', {3, 0x01}}, {'v', {3, 0x02}}, // L4
+            {'g', {4, 0x01}}, {'b', {4, 0x02}}, // R1
+            {'h', {5, 0x01}}, {'n', {5, 0x02}}, // R2
+            {'j', {6, 0x01}}, {'m', {6, 0x02}}, {'u', {6, 0x03}}, // R3
+            {'k', {7, 0x01}}, {',', {7, 0x02}}, // R4
+            {'l', {8, 0x01}}, {'.', {8, 0x02}}, // F1
+            {';', {9, 0x01}}, {'/', {9, 0x02}}, // B1
+            {'1', {10, 0x01}}, {'2', {10, 0x02}}, {'3', {10, 0x03}}, // F2
+            {'4', {11, 0x01}}, {'5', {11, 0x02}}, {'6', {11, 0x03}} // B2
         };
     }
 
+    // 定时器回调函数，读取键盘输入并更新电机状态
     void timer_callback() {
         char c;
+        // 非阻塞读取键盘输入
         while (read(STDIN_FILENO, &c, 1) > 0) {
-            auto it = key_map_.find(c);
+            auto it = key_map_.find(c); // 查找按键映射
+            // 如果按键在映射中，更新对应电机状态
             if (it != key_map_.end()) {
                 motor_states_[it->second.motor_idx] = it->second.cmd_value;
                 it->second.is_pressed = true;
-                it->second.last_press_time = steady_clock::now();
+                it->second.last_press_time = steady_clock::now(); // 更新按下时间
             }
         }
 
+        // 处理长按逻辑，超过300ms未松开则将状态置为0
         auto now = steady_clock::now();
         for (auto &pair : key_map_) {
-            auto &state = pair.second;
-            if (state.motor_idx <= 9 || state.motor_idx == 2 || state.motor_idx == 6) {
-                if (state.is_pressed) {
-                    auto elapsed = duration_cast<milliseconds>(now - state.last_press_time).count();
+            auto &state = pair.second; // 获取按键状态
+            // 如果是机械臂电机或行走轮电机
+            if (state.motor_idx <= 9) {
+                if (state.is_pressed) { // 如果按键被按下
+                    auto elapsed = duration_cast<milliseconds>(now - state.last_press_time).count(); // 计算按下时间
+                    // 如果按下时间超过300ms，则将状态置为0
                     if (elapsed > 300) {
                         motor_states_[state.motor_idx] = 0x00;
                         state.is_pressed = false;
@@ -93,7 +105,7 @@ private:
             }
         }
 
-        // F2 B2 无操作时发 00 忽略
+        // F2和B2无操作时发00忽略
         if (motor_states_[10] != 0x01 && motor_states_[10] != 0x02 && motor_states_[10] != 0x03) {
             motor_states_[10] = 0x00;
         }
@@ -101,12 +113,13 @@ private:
             motor_states_[11] = 0x00;
         }
 
-        // 拼成 24bit 数据（按顺序组合12个2bit控制位）
+        // 拼成24bits数据（按顺序组合12个2bits控制位）
         uint32_t cmd = 0;
         for (int i = 0; i < 12; ++i) {
             cmd |= (motor_states_[i] & 0x03) << (22 - i * 2);
         }
 
+        // 发布控制指令
         char buf[9];
         snprintf(buf, sizeof(buf), "%06X", cmd);
         auto msg = std_msgs::msg::String();
@@ -115,12 +128,12 @@ private:
     }
 };
 
-struct termios KeyboardControlNode::orig_term_;
+struct termios KeyboardControlNode::orig_term_; // 静态成员变量，用于保存原始终端设置
 
 int main(int argc, char *argv[]) {
-    rclcpp::init(argc, argv);
-    rclcpp::spin(std::make_shared<KeyboardControlNode>());
-    rclcpp::shutdown();
+    rclcpp::init(argc, argv); // 初始化ROS2
+    rclcpp::spin(std::make_shared<KeyboardControlNode>()); // 启动节点
+    rclcpp::shutdown(); // 清理资源
     return 0;
 }
 
