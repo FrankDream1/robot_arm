@@ -49,7 +49,7 @@ private:
     rclcpp::TimerBase::SharedPtr timer_; // 定时器
     rclcpp::Publisher<sensor_msgs::msg::JointState>::SharedPtr joint_pub_; // 反馈话题发布器
     rclcpp::Subscription<std_msgs::msg::String>::SharedPtr cmd_sub_; // 控制命令订阅器
-    uint16_t current_command_ = 0x0000; // 当前控制指令
+    uint32_t current_command_ = 0x000000; // 当前控制指令
 
     // CRC16-CCITT 校验函数，用于数据完整性验证
     uint16_t CRC16_CCITT(const uint8_t* data, uint16_t length) {
