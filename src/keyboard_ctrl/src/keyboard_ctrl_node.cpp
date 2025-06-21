@@ -76,34 +76,33 @@ private:
         };
     }
 
-    // 定时器回调函数，读取键盘输入并更新电机状态
     void timer_callback() {
         char c;
-        // 非阻塞读取键盘输入
-        while (read(STDIN_FILENO, &c, 1) > 0) {
-            auto it = key_map_.find(c); // 查找按键映射
-            // 如果按键在映射中，更新对应电机状态
+        int max_read = 10;  // 每次最多处理 10 个按键事件，防卡死
+        int read_count = 0;
+
+        while (read_count < max_read && read(STDIN_FILENO, &c, 1) > 0) {
+            read_count++;
+            auto it = key_map_.find(c);
             if (it != key_map_.end()) {
                 motor_states_[it->second.motor_idx] = it->second.cmd_value;
                 it->second.is_pressed = true;
-                it->second.last_press_time = steady_clock::now(); // 更新按下时间
-            }
-            if (it->second.motor_idx == 10) {
-                f2_needs_clear_ = true;
-            } else if (it->second.motor_idx == 11) {
-                b2_needs_clear_ = true;
+                it->second.last_press_time = steady_clock::now();
+
+                if (it->second.motor_idx == 10) {
+                    f2_needs_clear_ = true;
+                } else if (it->second.motor_idx == 11) {
+                    b2_needs_clear_ = true;
+                }
             }
         }
 
-        // 处理长按逻辑，超过300ms未松开则将状态置为0
         auto now = steady_clock::now();
         for (auto &pair : key_map_) {
-            auto &state = pair.second; // 获取按键状态
-            // 如果是机械臂电机或行走轮电机
+            auto &state = pair.second;
             if (state.motor_idx <= 9) {
-                if (state.is_pressed) { // 如果按键被按下
-                    auto elapsed = duration_cast<milliseconds>(now - state.last_press_time).count(); // 计算按下时间
-                    // 如果按下时间超过300ms，则将状态置为0
+                if (state.is_pressed) {
+                    auto elapsed = duration_cast<milliseconds>(now - state.last_press_time).count();
                     if (elapsed > 300) {
                         motor_states_[state.motor_idx] = 0x00;
                         state.is_pressed = false;
@@ -112,19 +111,17 @@ private:
             }
         }
 
-        // 拼成24bits数据（按顺序组合12个2bits控制位）
         uint32_t cmd = 0;
         for (int i = 0; i < 12; ++i) {
             cmd |= (motor_states_[i] & 0x03) << (22 - i * 2);
         }
 
-        // 发布控制指令
         char buf[9];
         snprintf(buf, sizeof(buf), "%06X", cmd);
         auto msg = std_msgs::msg::String();
         msg.data = buf;
         publisher_->publish(msg);
-        
+
         if (f2_needs_clear_) {
             motor_states_[10] = 0x00;
             f2_needs_clear_ = false;
@@ -134,6 +131,7 @@ private:
             b2_needs_clear_ = false;
         }
     }
+
 };
 
 struct termios KeyboardControlNode::orig_term_; // 静态成员变量，用于保存原始终端设置
@@ -144,4 +142,3 @@ int main(int argc, char *argv[]) {
     rclcpp::shutdown(); // 清理资源
     return 0;
 }
-
