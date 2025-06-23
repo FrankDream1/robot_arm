@@ -11,7 +11,7 @@ class KeyboardEvdevNode : public rclcpp::Node {
 public:
     KeyboardEvdevNode() : Node("keyboard_evdev_node") {
         publisher_ = this->create_publisher<std_msgs::msg::String>("/motor_command", 10);
-        device_path_ = declare_parameter<std::string>("device", "/dev/input/by-path/platform-i8042-serio-0-event-kbd");
+        device_path_ = declare_parameter<std::string>("device", "/dev/input/by-path/platform-3610000.usb-usb-0:2.2:1.0-event-kbd");
 
         fd_ = open(device_path_.c_str(), O_RDONLY);
         if (fd_ < 0) {
