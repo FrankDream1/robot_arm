@@ -22,7 +22,7 @@ class SerialCommNode : public rclcpp::Node {
 public:
     SerialCommNode() : Node("serial_comm_node") {
         // 打开串口设备 /dev/ttyUSB0
-        fd_ = openSerialPort("/dev/ttyUSB0");
+        fd_ = openSerialPort("/dev/ttyTHS1");
         if (fd_ < 0) {
             RCLCPP_ERROR(this->get_logger(), "打开串口失败");
             return;
