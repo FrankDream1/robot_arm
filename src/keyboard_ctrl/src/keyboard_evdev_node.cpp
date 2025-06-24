@@ -6,6 +6,7 @@
 #include <unordered_map>
 #include <string>
 #include <sstream>
+#include <sys/select.h>
 
 class KeyboardEvdevNode : public rclcpp::Node {
 public:
@@ -52,41 +53,73 @@ private:
             {KEY_4, {11, 0x01}}, {KEY_5, {11, 0x02}}, {KEY_6, {11, 0x03}}  // B2
         };
     }
-
+    
     void timer_callback() {
-        // 非阻塞读，处理所有事件
         struct input_event ev;
-        while (read(fd_, &ev, sizeof(ev)) == sizeof(ev)) {
-            if (ev.type == EV_KEY) {
-                auto it = key_map_.find(ev.code);
-                if (it != key_map_.end()) {
-                    int idx = it->second.first;
-                    uint8_t cmd = it->second.second;
+        fd_set read_fds;
+        struct timeval timeout;
+        int max_fd = fd_;
 
-                    if (ev.value == 1) { // 按下
-                        motor_states_[idx] = cmd;
-                    } else if (ev.value == 0) { // 抬起
-                        // 对F2 B2特判：抬起后不强制发00（视需求可改）
-                        if (idx <= 9) {
-                            motor_states_[idx] = 0x00;
+        // 设置 100ms 超时
+        timeout.tv_sec = 0;
+        timeout.tv_usec = 100000;  // 100ms
+
+        // 通过 select 检查是否有输入事件
+        FD_ZERO(&read_fds);
+        FD_SET(fd_, &read_fds);
+
+        int ret = select(max_fd + 1, &read_fds, NULL, NULL, &timeout);
+
+        // 如果有输入事件
+        if (ret > 0 && FD_ISSET(fd_, &read_fds)) {
+            // 读取输入事件
+            while (read(fd_, &ev, sizeof(ev)) == sizeof(ev)) {
+                if (ev.type == EV_KEY) {
+                    RCLCPP_INFO(this->get_logger(), "Key %d %s", ev.code, 
+                                ev.value == 1 ? "press" : (ev.value == 0 ? "release" : "repeat"));
+
+                    auto it = key_map_.find(ev.code);
+                    if (it != key_map_.end()) {
+                        int idx = it->second.first;
+                        uint8_t cmd = it->second.second;
+
+                        if (ev.value == 1) {  // 按下
+                            motor_states_[idx] = cmd;
+                            RCLCPP_INFO(this->get_logger(), "Motor %d set to %02X", idx, cmd);
+                        } else if (ev.value == 0) {  // 松开
+                            if (idx <= 9) {
+                                motor_states_[idx] = 0x00;  // 停止
+                                RCLCPP_INFO(this->get_logger(), "Motor %d stopped", idx);
+                            }
                         }
-                        // F2/B2 一次性指令，在按下时已设置，这里无需清
                     }
                 }
+
+                // // 打印 motor_states_ 数组的当前状态
+                // RCLCPP_INFO(this->get_logger(), "Motor States: ");
+                // for (int i = 0; i < 12; ++i) {
+                //     RCLCPP_INFO(this->get_logger(), "Motor %d: %d", i, motor_states_[i]);
+                // }
+
+                // 拼接 24bit 控制数据
+                uint32_t cmd_data = 0;
+                for (int i = 0; i < 12; ++i) {
+                    cmd_data |= (motor_states_[i] & 0x03) << (22 - i * 2);
+                }
+
+                // // 打印拼接的控制命令
+                // RCLCPP_INFO(this->get_logger(), "Control Command: %06X", cmd_data);
+
+                // 转换为十六进制字符串
+                char buf[9];
+                snprintf(buf, sizeof(buf), "%06X", cmd_data);
+
+                // 发布消息
+                auto msg = std_msgs::msg::String();
+                msg.data = buf;
+                publisher_->publish(msg);
             }
         }
-
-        // 拼成24bit数据
-        uint32_t cmd_data = 0;
-        for (int i = 0; i < 12; ++i) {
-            cmd_data |= (motor_states_[i] & 0x03) << (22 - i * 2);
-        }
-
-        char buf[9];
-        snprintf(buf, sizeof(buf), "%06X", cmd_data);
-        auto msg = std_msgs::msg::String();
-        msg.data = buf;
-        publisher_->publish(msg);
     }
 };
 
