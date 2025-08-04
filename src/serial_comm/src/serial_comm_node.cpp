@@ -7,6 +7,8 @@
 #include <cstring>
 #include <cstdint>
 #include <iostream>
+#include <sstream>
+#include <iomanip>
 
 /*
     上位机给下位机下发的数据帧（7字节），格式为0xAA（帧头）+12个电机控制命令
@@ -114,6 +116,14 @@ private:
         // 校验帧头帧尾
         if (buffer[0] != 0x55 || buffer[43] != 0xAA) return;
 
+        // 查看buffer内容
+        std::ostringstream oss;
+        oss << "Received buffer: ";
+        for (int i = 0; i < 44; ++i) {
+            oss << std::hex << std::uppercase << std::setw(2) << std::setfill('0') << (int)buffer[i] << " ";
+        }
+        RCLCPP_INFO(this->get_logger(), "%s", oss.str().c_str());
+
         // CRC校验
         uint16_t crc = CRC16_CCITT(&buffer[1], 40);
         uint16_t received_crc = (buffer[41] << 8) | buffer[42];
@@ -124,6 +134,13 @@ private:
         float currents[2];
         memcpy(angles, &buffer[1], 32);
         memcpy(currents, &buffer[33], 8);
+
+        if(angles[0] > 800){
+            angles[0] = 1440 - angles[0];
+        }
+        else{
+            angles[0] = -angles[0];
+        }
 
         // 构造ROS2 JointState消息
         auto msg = sensor_msgs::msg::JointState();

@@ -1,0 +1,18 @@
+# Train/val/test sets as 1) dir: path/to/imgs, 2) file: path/to/imgs.txt, or 3) list: [path/to/imgs1, path/to/imgs2, ..]
+path: /home/lwy/dev_ws/src/image_transfer/models/datasets/bvn # dataset root dir
+train: /home/lwy/dev_ws/src/image_transfer/models/datasets/bvn/train/images # train images (relative to 'path') 128 images
+val: /home/lwy/dev_ws/src/image_transfer/models/datasets/bvn/val/images # val images (relative to 'path') 128 images
+test: # test images (optional)
+
+#/home/lwy/dev_ws/src/image_transfer/models/datasets
+
+nc: 4
+# Classes
+names:
+  0: bolt_nut
+  1: bolt_head
+  2: blur_bolt
+  3: bolt_side
+
+ 
+
