@@ -35,7 +35,7 @@ public:
 
         // 创建订阅器，接收来自话题/motor_command的控制指令
         cmd_sub_ = this->create_subscription<std_msgs::msg::String>(
-            "/motor_command", 10,
+            "lllllllp", 10,
             std::bind(&SerialCommNode::command_callback, this, std::placeholders::_1)
         );
 

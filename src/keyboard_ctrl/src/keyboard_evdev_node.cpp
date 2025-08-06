@@ -13,15 +13,12 @@ class KeyboardEvdevNode : public rclcpp::Node {
 public:
     KeyboardEvdevNode() : Node("keyboard_evdev_node") {
         publisher_ = this->create_publisher<std_msgs::msg::String>("/motor_command", 10);
-<<<<<<< HEAD
 
         feedback_sub_ = this->create_subscription<sensor_msgs::msg::JointState>(
             "/motor_feedback", 10,
             std::bind(&KeyboardEvdevNode::feedback_callback, this, std::placeholders::_1)
         );
 
-=======
->>>>>>> 16912f6696bb647e1f0275ca9adea631e40e7ce4
         device_path_ = declare_parameter<std::string>("device", "/dev/input/by-path/platform-3610000.usb-usb-0:2.2:1.0-event-kbd");
 
         fd_ = open(device_path_.c_str(), O_RDONLY);
@@ -84,7 +81,6 @@ private:
         };
     }
     
-<<<<<<< HEAD
     void feedback_callback(const sensor_msgs::msg::JointState::SharedPtr msg) {
         RCLCPP_INFO(this->get_logger(), "收到电机反馈数据:");
         
@@ -102,8 +98,6 @@ private:
         */
     }
 
-=======
->>>>>>> 16912f6696bb647e1f0275ca9adea631e40e7ce4
     void timer_callback() {
         struct input_event ev;
         fd_set read_fds;
@@ -130,18 +124,12 @@ private:
 
                     auto it = key_map_.find(ev.code);
                     if (it != key_map_.end()) {
-<<<<<<< HEAD
                         int idx = it->second.first;         // 获取电机编号
                         uint8_t cmd = it->second.second;    // 获取电机状态
-=======
-                        int idx = it->second.first;
-                        uint8_t cmd = it->second.second;
->>>>>>> 16912f6696bb647e1f0275ca9adea631e40e7ce4
 
                         if (ev.value == 1) {  // 按下
                             motor_states_[idx] = cmd;
                             RCLCPP_INFO(this->get_logger(), "Motor %d set to %02X", idx, cmd);
-<<<<<<< HEAD
                             if(idx == 10){      // 锁存状态10
                                 rem1_latch_ = true;
                                 rem1_idx = cmd;
@@ -168,9 +156,6 @@ private:
                                 motor_states_[10] = rem1_idx;
                                 motor_states_[11] = rem2_idx;
                             }
-=======
-                        } else if (ev.value == 0) {  // 松开
->>>>>>> 16912f6696bb647e1f0275ca9adea631e40e7ce4
                             if (idx <= 9) {
                                 motor_states_[idx] = 0x00;  // 停止
                                 RCLCPP_INFO(this->get_logger(), "Motor %d stopped", idx);
@@ -186,10 +171,7 @@ private:
                 // }
 
                 // 拼接 24bit 控制数据
-<<<<<<< HEAD
                 // 每个电机占位2bit，motor0占最高的两位，motor1...类推
-=======
->>>>>>> 16912f6696bb647e1f0275ca9adea631e40e7ce4
                 uint32_t cmd_data = 0;
                 for (int i = 0; i < 12; ++i) {
                     cmd_data |= (motor_states_[i] & 0x03) << (22 - i * 2);
