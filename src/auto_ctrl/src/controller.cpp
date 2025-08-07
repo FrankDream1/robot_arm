@@ -51,7 +51,7 @@ void AutoController::control_loop() {
 	double uy = pid_y_.compute(target_[1], tcp[1], dt);
 	double uz = pid_z_.compute(target_[2], tcp[2], dt);
 
-	// 3. 映射到关节增量 (此处示例：前3 关节)
+	// 3. 映射到关节增量
 	std::vector<double> cmd = joints_.position;
 	for (int i = 0; i < 3 && i < (int)cmd.size(); ++i) {
 		cmd[i] += (i==0?ux:(i==1?uy:uz));
@@ -67,8 +67,6 @@ void AutoController::control_loop() {
 		frame |= (v & 0x03) << (22 - 2*i);
 	}
 
-	// 5. 变成 6 字节：0xAA + 3 bytes 数据 + CRC16 + 0x55
-	//    此处仅发 3 bytes 数据示例:
 	char buf[9];
 	snprintf(buf, sizeof(buf), "%06X", frame & 0xFFFFFF);
 

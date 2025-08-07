@@ -8,26 +8,25 @@
 #include "kinematics.hpp"
 #include "pid_controller.hpp"
 
-class BoltController : public rclcpp::Node
-{
+class AutoController : public rclcpp::Node {
 public:
-  BoltController();
+    AutoController();
 
 private:
-  void bolt_cb(const std_msgs::msg::Float64MultiArray::SharedPtr msg);
-  void joint_cb(const sensor_msgs::msg::JointState::SharedPtr msg);
-  void control_loop();
+    void image_cb(const std_msgs::msg::Float64MultiArray::SharedPtr msg);
+    void joint_cb(const sensor_msgs::msg::JointState::SharedPtr msg);
+    void control_loop();
 
-  rclcpp::Subscription<std_msgs::msg::Float64MultiArray>::SharedPtr bolt_sub_;
-  rclcpp::Subscription<sensor_msgs::msg::JointState>::SharedPtr joint_sub_;
-  rclcpp::Publisher<std_msgs::msg::String>::SharedPtr cmd_pub_;
-  rclcpp::TimerBase::SharedPtr timer_;
+    rclcpp::Subscription<std_msgs::msg::Float64MultiArray>::SharedPtr image_sub_;
+    rclcpp::Subscription<sensor_msgs::msg::JointState>::SharedPtr joint_sub_;
+    rclcpp::Publisher<std_msgs::msg::String>::SharedPtr cmd_pub_;
+    rclcpp::TimerBase::SharedPtr timer_;
 
-  std::vector<double> target_;           // x,y,z cm
-  sensor_msgs::msg::JointState joints_;  // 当前关节
-  bool have_target_{false}, have_joints_{false};
+    std::vector<double> target_;           // x,y,z cm
+    sensor_msgs::msg::JointState joints_;  // 当前关节
+    bool have_target_{false}, have_joints_{false};
 
-  PidController pid_x_, pid_y_, pid_z_;
+    PidController pid_x_, pid_y_, pid_z_;
 };
 
-#endif  // BOLT_TRACKER_CONTROL__BOLT_CONTROLLER_HPP_
+#endif  // CONTROLLER_HPP_

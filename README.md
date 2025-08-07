@@ -25,3 +25,5 @@ ros2 launch realsense2_camera rs_align_depth_launch.py depth_module.depth_profil
 ros2 run image_transfer subscriber
 
 ros2 run position position_sub
+
+ros2 run auto_ctrl auto_ctrl_node
